@@ -1,9 +1,8 @@
 {
   "name": "dexcom-share2",
   "version": "1.0.1",
-  "description": "",
+  "description": "API for reading blood glucose values from Dexcom's Share2 servers",
   "main": "index.js",
-  "scripts": {},
   "keywords": [
     "dexcom",
     "share",
@@ -11,10 +10,11 @@
     "glucose",
     "nightscout",
     "reading",
-    "bgl"
+    "bgl",
+    "cgm"
   ],
   "author": "Nathan Rajlich <n@n8.io>",
-  "license": "MIT",
+  "license": "GPLv3",
   "dependencies": {
     "async-retry": "^1.1.4",
     "debug": "^3.1.0",
