@@ -21,7 +21,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * @description: Logs in to Dexcom Share2 servers and reads blood glucose values.
+ * @description: Logs in to Dexcom Share servers and reads blood glucose values.
  */
 
 const ms = require('ms');
@@ -30,7 +30,7 @@ const crypto = require('crypto');
 const fetch = require('node-fetch');
 const sleep = require('then-sleep');
 const retry = require('async-retry');
-const debug = require('debug')('dexcom-share2');
+const debug = require('debug')('dexcom-share');
 
 module.exports = createIterator;
 

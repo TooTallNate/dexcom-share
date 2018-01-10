@@ -1,9 +1,9 @@
-# dexcom-share2
+# dexcom-share
 
-API for reading blood glucose values from Dexcom's Share2 servers
+API for reading blood glucose values from Dexcom's Share servers
 
 ```js
-const dexcom = require('dexcom-share2')
+const dexcom = require('dexcom-share')
 
 const iterator = dexcom({
   username: 'DEXCOM_SHARE_USERNAME',
