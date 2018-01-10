@@ -21,7 +21,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- *
  * @description: Logs in to Dexcom Share2 servers and reads blood glucose values.
  */
 
@@ -124,7 +123,7 @@ function createIterator(opts) {
     );
   }
 
-  async function read(count = 1) {
+  async function _read(count = 1) {
     if (!sessionId) {
       sessionId = login();
     }
@@ -143,17 +142,35 @@ function createIterator(opts) {
     }
   }
 
+  /**
+   * Reads `count` blood glucose entries from Dexcom's servers, without any
+   * waiting. Advances the iterator such that the next call to `next()` will
+   * wait until after the newest entry from this `read()` call.
+   */
+  async function read(...args) {
+    const readings = await _read(...args);
+    if (readings && readings.length > 0) {
+      latest = readings[0];
+    }
+    return readings;
+  }
+
+  /**
+   * Async iterator interface. Waits until the next estimated time that a Dexcom
+   * reading will be uploaded, then reads the latest value from the Dexcom servers
+   * repeatedly until one with a newer timestamp than the latest is returned.
+   */
   async function next() {
     await wait();
 
     const value = await retry(
       async () => {
-        const [value] = await read(1);
-        if (latest && latest.Date === value.Date) {
-          throw new Error('No new reading yet');
+        const [reading] = await _read(1);
+        if (latest && latest.Date === reading.Date) {
+          throw new Error('Retrying because no new reading yet');
         }
-        latest = value;
-        return value;
+        latest = reading;
+        return reading;
       },
       {
         retries: 100, // Infinity?
@@ -167,12 +184,14 @@ function createIterator(opts) {
     return { done: false, value };
   }
 
+  /**
+   * Waits until 5 minutes (Dexcom records every 5 minutes), plus 10 seconds
+   * (to allow some time for the new reading to be uploaded) since the latest
+   * reading on this iterator.
+   */
   async function wait() {
     let diff = 0;
     if (latest) {
-      // wait until 5 minutes (Dexcom records every 5 minutes)
-      // and 10 seconds (allow some time for the new reading to be uploaded,
-      // I've seen it take ~10 seconds, on average) after the latest reading
       diff = latest.Date + ms('5m') + ms('10s') - Date.now();
       if (diff > 0) {
         debug('Waiting for %o', ms(diff));
