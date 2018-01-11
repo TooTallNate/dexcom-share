@@ -128,17 +128,18 @@ function createIterator(opts) {
       sessionId = login();
     }
 
-    const fetchOpts = {
+    const opts = {
       maxCount: count,
       minutes: 1440,
       sessionID: await sessionId
     };
     try {
-      const readings = await getLatestReadings(fetchOpts);
+      const readings = await getLatestReadings(opts);
       return readings;
     } catch (err) {
-      debug('read(%o)', err);
+      debug('read error: %o', err);
       sessionId = null;
+      throw err;
     }
   }
 
