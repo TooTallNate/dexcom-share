@@ -1,6 +1,6 @@
 # dexcom-share
 
-This JavaScript module provides an [Async Iterator API][] for for reading
+This JavaScript module provides an [Async Iterator API][] for reading
 blood glucose readings from Dexcom's Share servers.
 
 ### Example
