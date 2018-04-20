@@ -14,9 +14,8 @@ async function main() {
     password: 'DEXCOM_SHARE_PASSWORD'
   })
 
-  while (true) {
-    const { done, value } = await iterator.next()
-    console.log(value)
+  for await (const reading of iterator) {
+    console.log(reading)
     /*
     { DT: '/Date(1515095827000-0800)/',
       ST: '/Date(1515095827000)/',
