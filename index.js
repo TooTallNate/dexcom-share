@@ -141,11 +141,6 @@ async function _read(state, _opts) {
 	}
 }
 
-/**
- * Waits until 5 minutes (Dexcom records every 5 minutes), plus 10 seconds
- * (to allow some time for the new reading to be uploaded) since the latest
- * reading on this iterator.
- */
 async function _wait({latestReading, config: {waitTime}}) {
 	let diff = 0;
 	if (latestReading) {
@@ -230,21 +225,23 @@ function createIterator(config) {
 	 * waiting. Advances the iterator such that the next call to `next()` will
 	 * wait until after the newest entry from this `read()` call.
 	 */
-	async function read(opts) {
+	iterator.read = async function read(opts) {
 		const readings = await _read(state, opts);
 		if (readings && readings.length > 0) {
 			debug('Read %o %s', readings.length, pluralize('reading', readings.length));
 			state.latestReading = readings[readings.length - 1];
 		}
 		return readings;
-	}
-	iterator.read = read;
+	};
 
-
-	function wait() {
+	/**
+	 * Waits until 5 minutes (Dexcom records every 5 minutes), plus 10 seconds
+	 * (to allow some time for the new reading to be uploaded) since the latest
+	 * reading on this iterator.
+	 */
+	iterator.wait = function wait() {
 		return _wait(state);
-	}
-	iterator.wait = wait;
+	};
 
 	return iterator;
 }
