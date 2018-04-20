@@ -146,15 +146,15 @@ async function _read(state, _opts) {
  * (to allow some time for the new reading to be uploaded) since the latest
  * reading on this iterator.
  */
-async function _wait(state) {
+async function _wait({latestReading, config: {waitTime}}) {
 	let diff = 0;
-	if (state.latestReading) {
-		diff = state.latestReading.Date + ms('5m') + ms('10s') - Date.now();
+	if (latestReading) {
+		diff = latestReading.Date + waitTime - Date.now();
 		if (diff > 0) {
 			debug('Waiting for %o', ms(diff));
 			await sleep(diff);
 		} else {
-			debug('No wait because last reading was %o ago', ms(-diff));
+			debug('No wait because last reading was %o ago', ms(-diff + waitTime));
 		}
 	}
 	return diff;
@@ -186,8 +186,8 @@ async function *_createIterator(state) {
 			},
 			{
 				retries: 1000,
-				minTimeout: ms('5s'),
-				maxTimeout: ms('5m'),
+				minTimeout: state.config.minTimeout,
+				maxTimeout: state.config.maxTimeout,
 				onRetry(err) {
 					debug('Retrying from error', err);
 				}
@@ -216,6 +216,9 @@ async function *_createIterator(state) {
 function createIterator(config) {
 	const state = {
 		config: Object.assign({
+			minTimeout: ms('5s'),
+			maxTimeout: ms('5m'),
+			waitTime: ms('5m') + ms('10s')
 		}, config),
 		latestReading: null,
 		sessionId: null
