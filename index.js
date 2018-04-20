@@ -29,8 +29,10 @@ const qs = require('querystring');
 const fetch = require('node-fetch');
 const sleep = require('then-sleep');
 const retry = require('async-retry');
+const pluralize = require('pluralize');
 const debug = require('debug')('dexcom-share');
 
+const MS_PER_MINUTE = ms('1m');
 const parseDate = d => parseInt(/Date\((.*)\)/.exec(d)[1], 10);
 
 // Defaults
@@ -123,11 +125,17 @@ async function _read(state, _opts) {
 		sessionID: await state.sessionId
 	}, _opts);
 
+	const latestReadingDate = state.latestReading
+		? state.latestReading.Date
+		: 0;
+
 	try {
-		const readings = await getLatestReadings(opts);
+		const readings = (await getLatestReadings(opts))
+			.filter(reading => reading.Date > latestReadingDate)
+			.sort((a, b) => a.Date - b.Date);
 		return readings;
 	} catch (err) {
-		debug('read error: %o', err);
+		debug('Read error: %o', err);
 		state.sessionId = null;
 		throw err;
 	}
@@ -161,25 +169,47 @@ async function *_createIterator(state) {
 	while (true) {
 		await _wait(state);
 
-		const value = await retry(
+		const readings = await retry(
 			async () => {
-				const [reading] = await _read(state, {maxCount: 1});
-				if (state.latestReading && state.latestReading.Date === reading.Date) {
-					throw new Error('Retrying because no new reading yet');
+				const opts = {};
+				if (state.latestReading) {
+					const msSinceLastReading = Date.now() - state.latestReading.Date;
+					opts.minutes = Math.ceil(msSinceLastReading / MS_PER_MINUTE);
+				} else {
+					opts.maxCount = 1;
 				}
-				state.latestReading = reading;
-				return reading;
+				const r = await _read(state, opts);
+				if (r.length === 0) {
+					throw new Error('No new readings yet');
+				}
+				return r;
 			},
 			{
-				retries: 100, // Infinity?
+				retries: 1000,
 				minTimeout: ms('5s'),
-				maxTimeout: ms('1m'),
+				maxTimeout: ms('5m'),
 				onRetry(err) {
-					debug('Retrying from error %o', String(err));
+					debug('Retrying from error', err);
 				}
 			}
 		);
-		yield value;
+
+		debug('Got %o new %s', readings.length, pluralize('reading', readings.length));
+		for (const reading of readings) {
+			const latestReadingDate = state.latestReading
+				? state.latestReading.Date
+				: 0;
+			if (reading.Date > latestReadingDate) {
+				state.latestReading = reading;
+				yield reading;
+			} else {
+				debug(
+					'Skipping %o because the latest reading is %o',
+					reading.Date,
+					latestReadingDate
+				);
+			}
+		}
 	}
 }
 
@@ -200,7 +230,8 @@ function createIterator(config) {
 	async function read(opts) {
 		const readings = await _read(state, opts);
 		if (readings && readings.length > 0) {
-			state.latestReading = readings[0];
+			debug('Read %s', readings.length, pluralize('reading', readings.length));
+			state.latestReading = readings[readings.length - 1];
 		}
 		return readings;
 	}
