@@ -154,7 +154,7 @@ async function _wait(state) {
 			debug('Waiting for %o', ms(diff));
 			await sleep(diff);
 		} else {
-			debug('Waiting diff %o', diff);
+			debug('No wait because last reading was %o ago', ms(-diff));
 		}
 	}
 	return diff;
