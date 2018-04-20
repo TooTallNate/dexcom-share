@@ -230,7 +230,7 @@ function createIterator(config) {
 	async function read(opts) {
 		const readings = await _read(state, opts);
 		if (readings && readings.length > 0) {
-			debug('Read %s', readings.length, pluralize('reading', readings.length));
+			debug('Read %o %s', readings.length, pluralize('reading', readings.length));
 			state.latestReading = readings[readings.length - 1];
 		}
 		return readings;
