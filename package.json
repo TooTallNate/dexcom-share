@@ -32,8 +32,7 @@
     "debug": "^3.1.0",
     "ms": "^2.1.1",
     "node-fetch": "^2.6.0",
-    "pluralize": "^7.0.0",
-    "then-sleep": "^1.0.1"
+    "pluralize": "^7.0.0"
   },
   "devDependencies": {
     "@types/async-retry": "^1.4.1",
