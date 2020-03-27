@@ -22,7 +22,6 @@
   "scripts": {
     "prebuild": "rimraf dist",
     "build": "tsc",
-    "postbuild": "cpy --parents src test '!**/*.ts' dist",
     "test": "mocha --reporter spec dist/test/*.js",
     "test-lint": "eslint src --ext .js,.ts",
     "prepublishOnly": "npm run build"
