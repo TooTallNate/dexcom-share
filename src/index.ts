@@ -23,41 +23,87 @@
  *
  * @description: Logs in to Dexcom Share servers and reads blood glucose values.
  */
+import ms from 'ms';
+import qs from 'querystring';
+import fetch from 'node-fetch';
+import retry from 'async-retry';
+import pluralize from 'pluralize';
+import createDebug from 'debug';
 
-const ms = require('ms');
-const qs = require('querystring');
-const fetch = require('node-fetch');
-const sleep = require('then-sleep');
-const retry = require('async-retry');
-const pluralize = require('pluralize');
-const debug = require('debug')('dexcom-share');
+interface AuthorizeOptions {
+	applicationId?: string;
+	username?: string;
+	accountName?: string;
+	password?: string;
+}
+
+interface GetLatestReadingsOptions {
+	sessionID: string;
+	minutes?: number;
+	maxCount?: number;
+}
+
+interface ReadOptions {
+	sessionID?: string;
+	minutes?: number;
+	maxCount?: number;
+}
+
+interface IteratorOptions extends AuthorizeOptions {
+	minTimeout: number;
+	maxTimeout: number;
+	waitTime: number;
+}
+
+interface IteratorState {
+	config: IteratorOptions;
+	latestReading: null | Reading;
+	sessionId: null | Promise<string>;
+}
+
+interface Reading {
+	Date: number;
+	latestReading: null | Reading;
+}
+
+interface DexcomShareIterator extends AsyncGenerator<Reading, void, unknown> {
+	read: (opts: ReadOptions) => Promise<Reading[]>;
+	wait: () => Promise<number>;
+}
 
 const MS_PER_MINUTE = ms('1m');
-const parseDate = d => parseInt(/Date\((.*)\)/.exec(d)[1], 10);
+const debug = createDebug('dexcom-share');
+const sleep = (n: number) => new Promise(r => setTimeout(r, n));
+const parseDate = (d: string): number => {
+	const m = /Date\((.*)\)/.exec(d);
+	return m ? parseInt(m[1], 10) : 0;
+};
 
 // Defaults
 const Defaults = {
-	'applicationId': 'd89443d2-327c-4a6f-89e5-496bbb0317db',
-	'agent': 'Dexcom Share/3.0.2.11 CFNetwork/711.2.23 Darwin/14.0.0',
-	'login': 'https://share2.dexcom.com/ShareWebServices/Services/General/LoginPublisherAccountByName',
-	'accept': 'application/json',
+	applicationId: 'd89443d2-327c-4a6f-89e5-496bbb0317db',
+	agent: 'Dexcom Share/3.0.2.11 CFNetwork/711.2.23 Darwin/14.0.0',
+	login:
+		'https://share2.dexcom.com/ShareWebServices/Services/General/LoginPublisherAccountByName',
+	accept: 'application/json',
 	'content-type': 'application/json',
-	'LatestGlucose': 'https://share2.dexcom.com/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues'
+	LatestGlucose:
+		'https://share2.dexcom.com/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues'
 	// ?sessionID=e59c836f-5aeb-4b95-afa2-39cf2769fede&minutes=1440&maxCount=1"
 };
 
 // Login to Dexcom's server.
-async function authorize(opts) {
+async function authorize(opts: AuthorizeOptions): Promise<string> {
 	const url = Defaults.login;
 	const body = {
 		password: opts.password,
 		applicationId: opts.applicationId || Defaults.applicationId,
-		accountName: opts.username || opts.userName || opts.accountName
+		accountName: opts.username || opts.accountName
 	};
 	const headers = {
 		'User-Agent': Defaults.agent,
 		'Content-Type': Defaults['content-type'],
-		'Accept': Defaults.accept
+		Accept: Defaults.accept
 	};
 
 	debug('POST %s', url);
@@ -74,8 +120,7 @@ async function authorize(opts) {
 	return sessionId;
 }
 
-async function getLatestReadings(opts) {
-	// ?sessionID=e59c836f-5aeb-4b95-afa2-39cf2769fede&minutes=1440&maxCount=1"
+async function getLatestReadings(opts: GetLatestReadingsOptions): Promise<Reading[]> {
 	const q = {
 		sessionID: opts.sessionID,
 		minutes: opts.minutes || 1440,
@@ -84,7 +129,7 @@ async function getLatestReadings(opts) {
 	const url = `${Defaults.LatestGlucose}?${qs.stringify(q)}`;
 	const headers = {
 		'User-Agent': Defaults.agent,
-		'Accept': Defaults.accept
+		Accept: Defaults.accept
 	};
 	debug('POST %s', url);
 	const res = await fetch(url, {
@@ -101,29 +146,32 @@ async function getLatestReadings(opts) {
 	return readings;
 }
 
-async function login(opts) {
-	return retry(() => {
-		debug('Fetching new token');
-		return authorize(opts);
-	},
-	{
-		retries: 10,
-		onRetry(err) {
-			debug('Error refreshing token %o', err);
+async function login(opts: AuthorizeOptions) {
+	return retry(
+		() => {
+			debug('Fetching new token');
+			return authorize(opts);
+		},
+		{
+			retries: 10,
+			onRetry(err) {
+				debug('Error refreshing token %o', err);
+			}
 		}
-	});
+	);
 }
 
-async function _read(state, _opts) {
+async function _read(state: IteratorState, _opts: ReadOptions = {}): Promise<Reading[]> {
 	if (!state.sessionId) {
 		state.sessionId = login(state.config);
 	}
 
-	const opts = Object.assign({
+	const opts = {
 		maxCount: 1000,
 		minutes: 1440,
-		sessionID: await state.sessionId
-	}, _opts);
+		sessionID: await state.sessionId,
+		..._opts
+	};
 
 	const latestReadingDate = state.latestReading
 		? state.latestReading.Date
@@ -141,7 +189,7 @@ async function _read(state, _opts) {
 	}
 }
 
-async function _wait({latestReading, config: {waitTime}}) {
+async function _wait({ latestReading, config: { waitTime } }: IteratorState): Promise<number> {
 	let diff = 0;
 	if (latestReading) {
 		diff = latestReading.Date + waitTime - Date.now();
@@ -149,7 +197,10 @@ async function _wait({latestReading, config: {waitTime}}) {
 			debug('Waiting for %o', ms(diff));
 			await sleep(diff);
 		} else {
-			debug('No wait because last reading was %o ago', ms(-diff + waitTime));
+			debug(
+				'No wait because last reading was %o ago',
+				ms(-diff + waitTime)
+			);
 		}
 	}
 	return diff;
@@ -160,16 +211,19 @@ async function _wait({latestReading, config: {waitTime}}) {
  * reading will be uploaded, then reads the latest value from the Dexcom servers
  * repeatedly until one with a newer timestamp than the latest is returned.
  */
-async function *_createIterator(state) {
+async function* _createDexcomShareIterator(state: IteratorState) {
 	while (true) {
 		await _wait(state);
 
 		const readings = await retry(
 			async () => {
-				const opts = {};
+				const opts: ReadOptions = {};
 				if (state.latestReading) {
-					const msSinceLastReading = Date.now() - state.latestReading.Date;
-					opts.minutes = Math.ceil(msSinceLastReading / MS_PER_MINUTE);
+					const msSinceLastReading =
+						Date.now() - state.latestReading.Date;
+					opts.minutes = Math.ceil(
+						msSinceLastReading / MS_PER_MINUTE
+					);
 				} else {
 					opts.maxCount = 1;
 				}
@@ -189,7 +243,11 @@ async function *_createIterator(state) {
 			}
 		);
 
-		debug('Got %o new %s', readings.length, pluralize('reading', readings.length));
+		debug(
+			'Got %o new %s',
+			readings.length,
+			pluralize('reading', readings.length)
+		);
 		for (const reading of readings) {
 			const latestReadingDate = state.latestReading
 				? state.latestReading.Date
@@ -208,27 +266,35 @@ async function *_createIterator(state) {
 	}
 }
 
-function createIterator(config) {
-	const state = {
-		config: Object.assign({
-			minTimeout: ms('5s'),
-			maxTimeout: ms('5m'),
-			waitTime: ms('5m') + ms('10s')
-		}, config),
+function createDexcomShareIterator(config: Partial<IteratorOptions>) {
+	const state: IteratorState = {
+		config: Object.assign(
+			{
+				minTimeout: ms('5s'),
+				maxTimeout: ms('5m'),
+				waitTime: ms('5m') + ms('10s')
+			},
+			config
+		),
 		latestReading: null,
 		sessionId: null
 	};
-	const iterator = _createIterator(state);
+
+	const iterator = _createDexcomShareIterator(state) as DexcomShareIterator;
 
 	/**
 	 * Reads `count` blood glucose entries from Dexcom's servers, without any
 	 * waiting. Advances the iterator such that the next call to `next()` will
 	 * wait until after the newest entry from this `read()` call.
 	 */
-	iterator.read = async function read(opts) {
+	iterator.read = async function read(opts: ReadOptions): Promise<Reading[]> {
 		const readings = await _read(state, opts);
 		if (readings && readings.length > 0) {
-			debug('Read %o %s', readings.length, pluralize('reading', readings.length));
+			debug(
+				'Read %o %s',
+				readings.length,
+				pluralize('reading', readings.length)
+			);
 			state.latestReading = readings[readings.length - 1];
 		}
 		return readings;
@@ -239,11 +305,11 @@ function createIterator(config) {
 	 * (to allow some time for the new reading to be uploaded) since the latest
 	 * reading on this iterator.
 	 */
-	iterator.wait = function wait() {
+	iterator.wait = function wait(): Promise<number> {
 		return _wait(state);
 	};
 
 	return iterator;
 }
 
-module.exports = createIterator;
+export = createDexcomShareIterator;

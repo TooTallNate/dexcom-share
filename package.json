@@ -2,7 +2,8 @@
   "name": "dexcom-share",
   "version": "2.0.1",
   "description": "API for reading blood glucose values from Dexcom's Share servers",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
   "keywords": [
     "dexcom",
     "share",
@@ -15,30 +16,32 @@
   ],
   "author": "Nathan Rajlich <n@n8.io>",
   "license": "GPLv3",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "rimraf dist",
+    "build": "tsc",
+    "postbuild": "cpy --parents src test '!**/*.ts' dist",
+    "test": "mocha --reporter spec dist/test/*.js",
+    "test-lint": "eslint src --ext .js,.ts",
+    "prepublishOnly": "npm run build"
+  },
   "dependencies": {
     "async-retry": "^1.1.4",
     "debug": "^3.1.0",
     "ms": "^2.1.1",
-    "node-fetch": "^1.7.3",
+    "node-fetch": "^2.6.0",
     "pluralize": "^7.0.0",
     "then-sleep": "^1.0.1"
   },
-  "scripts": {
-    "lint": "eslint --ext .jsx,.js .",
-    "lint-staged": "git diff --diff-filter=ACMRT --cached --name-only '*.js' '*.jsx' | xargs eslint"
-  },
   "devDependencies": {
-    "@zeit/eslint-config-node": "0.2.13",
-    "@zeit/git-hooks": "^0.1.4",
-    "eslint": "4.19.1",
-    "node-fetch": "2.1.2"
-  },
-  "eslintConfig": {
-    "extends": [
-      "@zeit/eslint-config-node"
-    ]
-  },
-  "git": {
-    "pre-commit": "lint-staged"
+    "@types/async-retry": "^1.4.1",
+    "@types/debug": "^4.1.5",
+    "@types/ms": "^0.7.31",
+    "@types/node": "12",
+    "@types/node-fetch": "^2.5.5",
+    "@types/pluralize": "^0.0.29",
+    "eslint": "4.19.1"
   }
 }
