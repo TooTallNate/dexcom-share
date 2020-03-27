@@ -61,9 +61,26 @@ interface IteratorState {
 	sessionId: null | Promise<string>;
 }
 
+enum Trend {
+	None,
+	DoubleUp,
+	SingleUp,
+	FortyFiveUp,
+	Flat,
+	FortyFiveDown,
+	SingleDown,
+	DoubleDown,
+	NotComputable,
+	OutOfRange
+}
+
 interface Reading {
+	DT: string;
+	ST: string;
+	Trend: number;
+	Value: number;
+	WT: string;
 	Date: number;
-	latestReading: null | Reading;
 }
 
 interface DexcomShareIterator extends AsyncGenerator<Reading, void, unknown> {
@@ -139,7 +156,7 @@ async function getLatestReadings(opts: GetLatestReadingsOptions): Promise<Readin
 	if (!res.ok) {
 		throw new Error(`${res.status} HTTP code`);
 	}
-	const readings = await res.json();
+	const readings: Reading[] = await res.json();
 	for (const reading of readings) {
 		reading.Date = parseDate(reading.WT);
 	}
