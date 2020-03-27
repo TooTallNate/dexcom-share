@@ -137,7 +137,9 @@ async function authorize(opts: AuthorizeOptions): Promise<string> {
 	return sessionId;
 }
 
-async function getLatestReadings(opts: GetLatestReadingsOptions): Promise<Reading[]> {
+async function getLatestReadings(
+	opts: GetLatestReadingsOptions
+): Promise<Reading[]> {
 	const q = {
 		sessionID: opts.sessionID,
 		minutes: opts.minutes || 1440,
@@ -178,7 +180,10 @@ async function login(opts: AuthorizeOptions) {
 	);
 }
 
-async function _read(state: IteratorState, _opts: ReadOptions = {}): Promise<Reading[]> {
+async function _read(
+	state: IteratorState,
+	_opts: ReadOptions = {}
+): Promise<Reading[]> {
 	if (!state.sessionId) {
 		state.sessionId = login(state.config);
 	}
@@ -206,7 +211,10 @@ async function _read(state: IteratorState, _opts: ReadOptions = {}): Promise<Rea
 	}
 }
 
-async function _wait({ latestReading, config: { waitTime } }: IteratorState): Promise<number> {
+async function _wait({
+	latestReading,
+	config: { waitTime }
+}: IteratorState): Promise<number> {
 	let diff = 0;
 	if (latestReading) {
 		diff = latestReading.Date + waitTime - Date.now();
