@@ -77,7 +77,7 @@ enum Trend {
 interface Reading {
 	DT: string;
 	ST: string;
-	Trend: number;
+	Trend: Trend;
 	Value: number;
 	WT: string;
 	Date: number;
