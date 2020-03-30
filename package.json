@@ -1,6 +1,6 @@
 {
   "name": "dexcom-share",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "API for reading blood glucose values from Dexcom's Share servers",
   "main": "./dist/index.js",
   "typings": "./dist/index.d.ts",
