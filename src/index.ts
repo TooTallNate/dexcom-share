@@ -30,64 +30,6 @@ import retry from 'async-retry';
 import pluralize from 'pluralize';
 import createDebug from 'debug';
 
-interface AuthorizeOptions {
-	applicationId?: string;
-	username?: string;
-	accountName?: string;
-	password?: string;
-}
-
-interface GetLatestReadingsOptions {
-	sessionID: string;
-	minutes?: number;
-	maxCount?: number;
-}
-
-interface ReadOptions {
-	sessionID?: string;
-	minutes?: number;
-	maxCount?: number;
-}
-
-interface IteratorOptions extends AuthorizeOptions {
-	minTimeout: number;
-	maxTimeout: number;
-	waitTime: number;
-}
-
-interface IteratorState {
-	config: IteratorOptions;
-	latestReading: null | Reading;
-	sessionId: null | Promise<string>;
-}
-
-enum Trend {
-	None,
-	DoubleUp,
-	SingleUp,
-	FortyFiveUp,
-	Flat,
-	FortyFiveDown,
-	SingleDown,
-	DoubleDown,
-	NotComputable,
-	OutOfRange
-}
-
-interface Reading {
-	DT: string;
-	ST: string;
-	Trend: Trend;
-	Value: number;
-	WT: string;
-	Date: number;
-}
-
-interface DexcomShareIterator extends AsyncGenerator<Reading, void, unknown> {
-	read: (opts: ReadOptions) => Promise<Reading[]>;
-	wait: () => Promise<number>;
-}
-
 const MS_PER_MINUTE = ms('1m');
 const debug = createDebug('dexcom-share');
 const sleep = (n: number) => new Promise(r => setTimeout(r, n));
@@ -110,7 +52,9 @@ const Defaults = {
 };
 
 // Login to Dexcom's server.
-async function authorize(opts: AuthorizeOptions): Promise<string> {
+async function authorize(
+	opts: createDexcomShareIterator.AuthorizeOptions
+): Promise<string> {
 	const url = Defaults.login;
 	const body = {
 		password: opts.password,
@@ -138,8 +82,8 @@ async function authorize(opts: AuthorizeOptions): Promise<string> {
 }
 
 async function getLatestReadings(
-	opts: GetLatestReadingsOptions
-): Promise<Reading[]> {
+	opts: createDexcomShareIterator.GetLatestReadingsOptions
+): Promise<createDexcomShareIterator.Reading[]> {
 	const q = {
 		sessionID: opts.sessionID,
 		minutes: opts.minutes || 1440,
@@ -158,14 +102,14 @@ async function getLatestReadings(
 	if (!res.ok) {
 		throw new Error(`${res.status} HTTP code`);
 	}
-	const readings: Reading[] = await res.json();
+	const readings: createDexcomShareIterator.Reading[] = await res.json();
 	for (const reading of readings) {
 		reading.Date = parseDate(reading.WT);
 	}
 	return readings;
 }
 
-async function login(opts: AuthorizeOptions) {
+async function login(opts: createDexcomShareIterator.AuthorizeOptions) {
 	return retry(
 		() => {
 			debug('Fetching new token');
@@ -181,9 +125,9 @@ async function login(opts: AuthorizeOptions) {
 }
 
 async function _read(
-	state: IteratorState,
-	_opts: ReadOptions = {}
-): Promise<Reading[]> {
+	state: createDexcomShareIterator.IteratorState,
+	_opts: createDexcomShareIterator.ReadOptions = {}
+): Promise<createDexcomShareIterator.Reading[]> {
 	if (!state.sessionId) {
 		state.sessionId = login(state.config);
 	}
@@ -214,7 +158,7 @@ async function _read(
 async function _wait({
 	latestReading,
 	config: { waitTime }
-}: IteratorState): Promise<number> {
+}: createDexcomShareIterator.IteratorState): Promise<number> {
 	let diff = 0;
 	if (latestReading) {
 		diff = latestReading.Date + waitTime - Date.now();
@@ -236,13 +180,15 @@ async function _wait({
  * reading will be uploaded, then reads the latest value from the Dexcom servers
  * repeatedly until one with a newer timestamp than the latest is returned.
  */
-async function* _createDexcomShareIterator(state: IteratorState) {
+async function* _createDexcomShareIterator(
+	state: createDexcomShareIterator.IteratorState
+) {
 	while (true) {
 		await _wait(state);
 
 		const readings = await retry(
 			async () => {
-				const opts: ReadOptions = {};
+				const opts: createDexcomShareIterator.ReadOptions = {};
 				if (state.latestReading) {
 					const msSinceLastReading =
 						Date.now() - state.latestReading.Date;
@@ -291,8 +237,10 @@ async function* _createDexcomShareIterator(state: IteratorState) {
 	}
 }
 
-function createDexcomShareIterator(config: Partial<IteratorOptions>) {
-	const state: IteratorState = {
+function createDexcomShareIterator(
+	config: Partial<createDexcomShareIterator.IteratorOptions>
+) {
+	const state: createDexcomShareIterator.IteratorState = {
 		config: Object.assign(
 			{
 				minTimeout: ms('5s'),
@@ -305,14 +253,18 @@ function createDexcomShareIterator(config: Partial<IteratorOptions>) {
 		sessionId: null
 	};
 
-	const iterator = _createDexcomShareIterator(state) as DexcomShareIterator;
+	const iterator = _createDexcomShareIterator(
+		state
+	) as createDexcomShareIterator.DexcomShareIterator;
 
 	/**
 	 * Reads `count` blood glucose entries from Dexcom's servers, without any
 	 * waiting. Advances the iterator such that the next call to `next()` will
 	 * wait until after the newest entry from this `read()` call.
 	 */
-	iterator.read = async function read(opts: ReadOptions): Promise<Reading[]> {
+	iterator.read = async function read(
+		opts: createDexcomShareIterator.ReadOptions
+	): Promise<createDexcomShareIterator.Reading[]> {
 		const readings = await _read(state, opts);
 		if (readings && readings.length > 0) {
 			debug(
@@ -335,6 +287,67 @@ function createDexcomShareIterator(config: Partial<IteratorOptions>) {
 	};
 
 	return iterator;
+}
+
+namespace createDexcomShareIterator {
+	export interface AuthorizeOptions {
+		applicationId?: string;
+		username?: string;
+		accountName?: string;
+		password?: string;
+	}
+
+	export interface GetLatestReadingsOptions {
+		sessionID: string;
+		minutes?: number;
+		maxCount?: number;
+	}
+
+	export interface ReadOptions {
+		sessionID?: string;
+		minutes?: number;
+		maxCount?: number;
+	}
+
+	export interface IteratorOptions extends AuthorizeOptions {
+		minTimeout: number;
+		maxTimeout: number;
+		waitTime: number;
+	}
+
+	export interface IteratorState {
+		config: IteratorOptions;
+		latestReading: null | Reading;
+		sessionId: null | Promise<string>;
+	}
+
+	enum Trend {
+		None,
+		DoubleUp,
+		SingleUp,
+		FortyFiveUp,
+		Flat,
+		FortyFiveDown,
+		SingleDown,
+		DoubleDown,
+		NotComputable,
+		OutOfRange
+	}
+
+	export interface Reading {
+		DT: string;
+		ST: string;
+		Trend: Trend;
+		Value: number;
+		WT: string;
+		Date: number;
+	}
+
+	export interface DexcomShareIterator
+		extends AsyncGenerator<Reading, void, unknown> {
+		read: (opts: ReadOptions) => Promise<Reading[]>;
+		wait: () => Promise<number>;
+	}
 }
 
 export = createDexcomShareIterator;
