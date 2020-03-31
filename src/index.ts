@@ -321,7 +321,7 @@ namespace createDexcomShareIterator {
 		sessionId: null | Promise<string>;
 	}
 
-	enum Trend {
+	export enum Trend {
 		None,
 		DoubleUp,
 		SingleUp,
