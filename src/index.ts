@@ -286,6 +286,13 @@ function createDexcomShareIterator(
 		return _wait(state);
 	};
 
+	/**
+	 * Resets the iterator.
+	 */
+	iterator.reset = function reset(): void {
+		state.latestReading = null;
+	};
+
 	return iterator;
 }
 
@@ -345,8 +352,9 @@ namespace createDexcomShareIterator {
 
 	export interface DexcomShareIterator
 		extends AsyncGenerator<Reading, void, unknown> {
-		read: (opts: ReadOptions) => Promise<Reading[]>;
-		wait: () => Promise<number>;
+		read(opts: ReadOptions): Promise<Reading[]>;
+		wait(): Promise<number>;
+		reset(): void;
 	}
 }
 
