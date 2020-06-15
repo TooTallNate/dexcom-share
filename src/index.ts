@@ -32,7 +32,7 @@ import createDebug from 'debug';
 
 const MS_PER_MINUTE = ms('1m');
 const debug = createDebug('dexcom-share');
-const sleep = (n: number) => new Promise(r => setTimeout(r, n));
+const sleep = (n: number) => new Promise((r) => setTimeout(r, n));
 const parseDate = (d: string): number => {
 	const m = /Date\((.*)\)/.exec(d);
 	return m ? parseInt(m[1], 10) : 0;
@@ -47,38 +47,71 @@ const Defaults = {
 	accept: 'application/json',
 	'content-type': 'application/json',
 	LatestGlucose:
-		'https://share2.dexcom.com/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues'
+		'https://share2.dexcom.com/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues',
 	// ?sessionID=e59c836f-5aeb-4b95-afa2-39cf2769fede&minutes=1440&maxCount=1"
 };
+
+class AuthorizeError extends Error {
+	constructor(data: string) {
+		let message = data;
+		let name = 'AuthorizeError';
+		const matches = data.match(/\S+='(.*?)'/g);
+		if (matches) {
+			const content = matches.find((m) => m.startsWith('Content='));
+			if (content) {
+				const parsed = JSON.parse(
+					content.substring(9, content.length - 1)
+				);
+				message = parsed.errors
+					.join(' ')
+					.replace(
+						/([a-z])([A-Z])/g,
+						(_: string, a: string, b: string) =>
+							`${a} ${b.toLowerCase()}`
+					);
+				if (!message.endsWith('.')) {
+					message += '.';
+				}
+			}
+
+			const key = matches.find((m) => m.startsWith('Key='));
+			if (key) {
+				name = key.substring(5, key.length - 1).replace('SSO_', '');
+			}
+		}
+		super(message);
+		this.name = name;
+	}
+}
 
 // Login to Dexcom's server.
 async function authorize(
 	opts: createDexcomShareIterator.AuthorizeOptions
 ): Promise<string> {
 	const url = Defaults.login;
-	const body = {
+	const payload = {
 		password: opts.password,
 		applicationId: opts.applicationId || Defaults.applicationId,
-		accountName: opts.username || opts.accountName
+		accountName: opts.username || opts.accountName,
 	};
 	const headers = {
 		'User-Agent': Defaults.agent,
 		'Content-Type': Defaults['content-type'],
-		Accept: Defaults.accept
+		Accept: Defaults.accept,
 	};
 
 	debug('POST %s', url);
 	const res = await fetch(url, {
 		method: 'POST',
 		headers,
-		body: JSON.stringify(body)
+		body: JSON.stringify(payload),
 	});
+	const body = await res.json();
 	if (!res.ok) {
-		throw new Error(`${res.status} HTTP code`);
+		throw new AuthorizeError(body.Message);
 	}
-	const sessionId = await res.json();
-	debug('Session ID: %o', sessionId);
-	return sessionId;
+	debug('Session ID: %o', body);
+	return body;
 }
 
 async function getLatestReadings(
@@ -87,17 +120,17 @@ async function getLatestReadings(
 	const q = {
 		sessionID: opts.sessionID,
 		minutes: opts.minutes || 1440,
-		maxCount: opts.maxCount || 1
+		maxCount: opts.maxCount || 1,
 	};
 	const url = `${Defaults.LatestGlucose}?${qs.stringify(q)}`;
 	const headers = {
 		'User-Agent': Defaults.agent,
-		Accept: Defaults.accept
+		Accept: Defaults.accept,
 	};
 	debug('POST %s', url);
 	const res = await fetch(url, {
 		method: 'POST',
-		headers
+		headers,
 	});
 	if (!res.ok) {
 		throw new Error(`${res.status} HTTP code`);
@@ -110,16 +143,24 @@ async function getLatestReadings(
 }
 
 async function login(opts: createDexcomShareIterator.AuthorizeOptions) {
-	return retry(
-		() => {
+	return retry<string>(
+		async (bail) => {
 			debug('Fetching new token');
-			return authorize(opts);
+			try {
+				return await authorize(opts);
+			} catch (err) {
+				if (err instanceof AuthorizeError) {
+					bail(err);
+					return '';
+				}
+				throw err;
+			}
 		},
 		{
 			retries: 10,
 			onRetry(err) {
 				debug('Error refreshing token %o', err);
-			}
+			},
 		}
 	);
 }
@@ -136,7 +177,7 @@ async function _read(
 		maxCount: 1000,
 		minutes: 1440,
 		sessionID: await state.sessionId,
-		..._opts
+		..._opts,
 	};
 
 	const latestReadingDate = state.latestReading
@@ -145,7 +186,7 @@ async function _read(
 
 	try {
 		const readings = (await getLatestReadings(opts))
-			.filter(reading => reading.Date > latestReadingDate)
+			.filter((reading) => reading.Date > latestReadingDate)
 			.sort((a, b) => a.Date - b.Date);
 		return readings;
 	} catch (err) {
@@ -157,7 +198,7 @@ async function _read(
 
 async function _wait({
 	latestReading,
-	config: { waitTime }
+	config: { waitTime },
 }: createDexcomShareIterator.IteratorState): Promise<number> {
 	let diff = 0;
 	if (latestReading) {
@@ -210,7 +251,7 @@ async function* _createDexcomShareIterator(
 				maxTimeout: state.config.maxTimeout,
 				onRetry(err) {
 					debug('Retrying from error', err);
-				}
+				},
 			}
 		);
 
@@ -245,12 +286,12 @@ function createDexcomShareIterator(
 			{
 				minTimeout: ms('5s'),
 				maxTimeout: ms('5m'),
-				waitTime: ms('5m') + ms('10s')
+				waitTime: ms('5m') + ms('10s'),
 			},
 			config
 		),
 		latestReading: null,
-		sessionId: null
+		sessionId: null,
 	};
 
 	const iterator = _createDexcomShareIterator(
@@ -338,7 +379,7 @@ namespace createDexcomShareIterator {
 		SingleDown,
 		DoubleDown,
 		NotComputable,
-		OutOfRange
+		OutOfRange,
 	}
 
 	export interface Reading {
