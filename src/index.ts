@@ -37,17 +37,18 @@ const parseDate = (d: string): number => {
 	const m = /Date\((.*)\)/.exec(d);
 	return m ? parseInt(m[1], 10) : 0;
 };
+let isOutsideUs = false;
 
 // Defaults
 const Defaults = {
+	baseUrl: 'https://share2.dexcom.com/ShareWebServices/Services',
+	baseUrlOutsideUs: 'https://shareous1.dexcom.com/ShareWebServices/Services',
 	applicationId: 'd89443d2-327c-4a6f-89e5-496bbb0317db',
 	agent: 'Dexcom Share/3.0.2.11 CFNetwork/711.2.23 Darwin/14.0.0',
-	login:
-		'https://share2.dexcom.com/ShareWebServices/Services/General/LoginPublisherAccountByName',
+	login: '/General/LoginPublisherAccountByName',
 	accept: 'application/json',
 	'content-type': 'application/json',
-	LatestGlucose:
-		'https://share2.dexcom.com/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues',
+	LatestGlucose: '/Publisher/ReadPublisherLatestGlucoseValues',
 	// ?sessionID=e59c836f-5aeb-4b95-afa2-39cf2769fede&minutes=1440&maxCount=1"
 };
 
@@ -88,7 +89,8 @@ class AuthorizeError extends Error {
 async function authorize(
 	opts: createDexcomShareIterator.AuthorizeOptions
 ): Promise<string> {
-	const url = Defaults.login;
+	isOutsideUs = !!opts.outsideUs;
+	const url = `${isOutsideUs ? Defaults.baseUrlOutsideUs : Defaults.baseUrl}${Defaults.login}`;
 	const payload = {
 		password: opts.password,
 		applicationId: opts.applicationId || Defaults.applicationId,
@@ -122,7 +124,7 @@ async function getLatestReadings(
 		minutes: opts.minutes || 1440,
 		maxCount: opts.maxCount || 1,
 	};
-	const url = `${Defaults.LatestGlucose}?${qs.stringify(q)}`;
+	const url = `${isOutsideUs ? Defaults.baseUrlOutsideUs : Defaults.baseUrl}${Defaults.LatestGlucose}?${qs.stringify(q)}`;
 	const headers = {
 		'User-Agent': Defaults.agent,
 		Accept: Defaults.accept,
@@ -343,6 +345,7 @@ namespace createDexcomShareIterator {
 		username?: string;
 		accountName?: string;
 		password?: string;
+		outsideUs?: boolean;
 	}
 
 	export interface GetLatestReadingsOptions {
