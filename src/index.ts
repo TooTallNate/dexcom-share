@@ -37,7 +37,6 @@ const parseDate = (d: string): number => {
 	const m = /Date\((.*)\)/.exec(d);
 	return m ? parseInt(m[1], 10) : 0;
 };
-let isOutsideUs = false;
 
 // Defaults
 const Defaults = {
@@ -89,8 +88,7 @@ class AuthorizeError extends Error {
 async function authorize(
 	opts: createDexcomShareIterator.AuthorizeOptions
 ): Promise<string> {
-	isOutsideUs = !!opts.outsideUs;
-	const url = `${isOutsideUs ? Defaults.baseUrlOutsideUs : Defaults.baseUrl}${Defaults.login}`;
+	const url = `${opts.outsideUs ? Defaults.baseUrlOutsideUs : Defaults.baseUrl}${Defaults.login}`;
 	const payload = {
 		password: opts.password,
 		applicationId: opts.applicationId || Defaults.applicationId,
@@ -124,7 +122,7 @@ async function getLatestReadings(
 		minutes: opts.minutes || 1440,
 		maxCount: opts.maxCount || 1,
 	};
-	const url = `${isOutsideUs ? Defaults.baseUrlOutsideUs : Defaults.baseUrl}${Defaults.LatestGlucose}?${qs.stringify(q)}`;
+	const url = `${opts.outsideUs ? Defaults.baseUrlOutsideUs : Defaults.baseUrl}${Defaults.LatestGlucose}?${qs.stringify(q)}`;
 	const headers = {
 		'User-Agent': Defaults.agent,
 		Accept: Defaults.accept,
@@ -179,6 +177,7 @@ async function _read(
 		maxCount: 1000,
 		minutes: 1440,
 		sessionID: await state.sessionId,
+		outsideUs: !!state.config.outsideUs,
 		..._opts,
 	};
 
@@ -352,6 +351,7 @@ namespace createDexcomShareIterator {
 		sessionID: string;
 		minutes?: number;
 		maxCount?: number;
+		outsideUs: boolean;
 	}
 
 	export interface ReadOptions {
