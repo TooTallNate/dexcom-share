@@ -138,6 +138,14 @@ async function getLatestReadings(
 	const readings: createDexcomShareIterator.Reading[] = await res.json();
 	for (const reading of readings) {
 		reading.Date = parseDate(reading.WT);
+
+		// Normalize `Trend` back into a Number since Dexcom
+		// changed it to a string on Dec 8, 2021.
+		if (typeof reading.Trend === 'string') {
+			reading.Trend = createDexcomShareIterator.Trend[
+				reading.Trend
+			] as unknown as createDexcomShareIterator.Trend;
+		}
 	}
 	return readings;
 }
