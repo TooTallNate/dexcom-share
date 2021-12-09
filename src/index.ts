@@ -42,8 +42,7 @@ const parseDate = (d: string): number => {
 const Defaults = {
 	applicationId: 'd89443d2-327c-4a6f-89e5-496bbb0317db',
 	agent: 'Dexcom Share/3.0.2.11 CFNetwork/711.2.23 Darwin/14.0.0',
-	login:
-		'https://share2.dexcom.com/ShareWebServices/Services/General/LoginPublisherAccountByName',
+	login: 'https://share2.dexcom.com/ShareWebServices/Services/General/LoginPublisherAccountByName',
 	accept: 'application/json',
 	'content-type': 'application/json',
 	LatestGlucose:
@@ -138,6 +137,14 @@ async function getLatestReadings(
 	const readings: createDexcomShareIterator.Reading[] = await res.json();
 	for (const reading of readings) {
 		reading.Date = parseDate(reading.WT);
+
+		// Normalize `Trend` back into a Number since Dexcom
+		// changed it to a string on Dec 8, 2021.
+		if (typeof reading.Trend === 'string') {
+			reading.Trend = createDexcomShareIterator.Trend[
+				reading.Trend
+			] as unknown as createDexcomShareIterator.Trend;
+		}
 	}
 	return readings;
 }
